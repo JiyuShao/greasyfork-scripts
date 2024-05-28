@@ -4,7 +4,6 @@
 // @version      2024-05-23
 // @description  油猴菜单库，支持开关菜单，支持状态保持，支持 Iframe
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
-// @grant        unsafeWindow
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
 // @grant        GM_setValue
