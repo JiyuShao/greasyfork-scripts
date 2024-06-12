@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MonkeyDebugger
 // @namespace    https://github.com/JiyuShao/greasyfork-scripts
-// @version      2024-05-23
+// @version      2024-06-11
 // @description  Debug js using monkey patch
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
 // @license      MIT
@@ -12,7 +12,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addValueChangeListener
-// @require https://update.greasyfork.org/scripts/496315/1384535/QuickMenu.js
+// @require https://update.greasyfork.org/scripts/496315/1392531/QuickMenu.js
 // ==/UserScript==
 
 /* eslint-disable no-eval */
@@ -24,39 +24,70 @@
     debugger;
   `;
 
+  // 保存原始的 Function 构造器
+  const originalFunction = unsafeWindow.Function.prototype.constructor;
+  const addFnPatchCode = function (fn) {
+    const finalFn = function (...args) {
+      if (!args.length) return fn.apply(this, args);
+      args[args.length - 1] = `${patchCode}; ${args[args.length - 1]}`;
+      return fn.apply(this, args);
+    };
+    finalFn.prototype = originalFunction.prototype;
+    Object.defineProperty(finalFn.prototype, 'constructor', {
+      value: finalFn,
+      writable: true,
+      configurable: true,
+    });
+    return finalFn;
+  };
+  const removeFnDebugger = function () {
+    const finalFn = function (...args) {
+      if (!args.length) return originalFunction.apply(this, args);
+      args[args.length - 1] = args[args.length - 1].replace(/debugger/g, '');
+      return originalFunction.apply(this, args);
+    };
+    finalFn.prototype = originalFunction.prototype;
+    Object.defineProperty(finalFn.prototype, 'constructor', {
+      value: finalFn,
+      writable: true,
+      configurable: true,
+    });
+    return finalFn;
+  };
   QuickMenu.add({
-    name: '开启 new Function 调试',
+    name: '开启 Function 调试',
     type: 'toggle',
     shouldInitRun: true,
     shouldAddMenu: () => {
       return unsafeWindow === unsafeWindow.top;
     },
     callback: (value) => {
-      // 保存原始的 Function 构造器
-      const originalFunction = Function.originalFunction
-        ? Function.originalFunction
-        : Function;
-      Function.originalFunction = originalFunction;
       if (value === 'on') {
-        // 定义一个新的 Function 构造器
-        const patchedFunction = function (...args) {
-          // 在构造的函数代码前插入 debugger 语句
-          const codeWithDebugger = `${patchCode}; ${args[0]}`;
-          return originalFunction.call(
-            this,
-            codeWithDebugger,
-            ...args.slice(1)
-          );
-        };
-        patchedFunction.prototype = originalFunction.prototype;
-        // 替换全局的 Function
-        unsafeWindow.Function = patchedFunction;
+        // 替换全局的 Function constructor
+        unsafeWindow.Function = addFnPatchCode();
       } else if (value === 'off') {
-        unsafeWindow.Function = originalFunction;
+        // 替换全局的 Function constructor
+        unsafeWindow.Function = removeFnDebugger();
       }
     },
   });
 
+  // 保存原始的 eval 函数
+  const originalEval = unsafeWindow.eval;
+  const addEvalPatchCode = function () {
+    return function (...args) {
+      if (!args.length) return originalEval.apply(this, args);
+      args[0] = `${patchCode}; ${args[0]}`;
+      return originalEval.apply(this, args);
+    };
+  };
+  const removeEvalDebugger = function () {
+    return function (...args) {
+      if (!args.length) return originalEval.apply(this, args);
+      args[0] = args[0].replace(/debugger/g, '');
+      return originalEval.apply(this, args);
+    };
+  };
   QuickMenu.add({
     name: '开启 eval 调试',
     type: 'toggle',
@@ -65,27 +96,45 @@
       return unsafeWindow === unsafeWindow.top;
     },
     callback: (value) => {
-      // 保存原始的 eval 函数
-      const originalEval = eval.originalEval ? eval.originalEval : eval;
-      eval.originalEval = originalEval;
       if (value === 'on') {
-        // 定义一个新的 eval 函数
-        const patchedEval = function (code) {
-          // 在 eval 的代码前插入 debugger 语句
-          const codeWithDebugger = `${patchCode}; ${code}`;
-          return originalEval(codeWithDebugger);
-        };
-        patchedEval.prototype = originalEval.prototype;
         // 替换全局的 eval 函数
-        unsafeWindow.eval = patchedEval;
+        unsafeWindow.eval = addEvalPatchCode();
       } else if (value === 'off') {
-        unsafeWindow.eval = originalEval;
+        unsafeWindow.eval = removeEvalDebugger();
+      }
+    },
+  });
+
+  const originalDefineProperty = unsafeWindow.Object.defineProperty;
+  // 覆盖 `Error` 对象的 `message` 属性的 getter
+  const removeErrorMessageGetter = () => {
+    return function (obj, prop, descriptor) {
+      if (obj instanceof Error && prop === 'message') {
+        delete descriptor.get;
+        delete descriptor.set;
+      }
+      return originalDefineProperty.call(Object, obj, prop, descriptor);
+    };
+  };
+  // https://github.com/fz6m/console-ban/tree/master
+  QuickMenu.add({
+    name: '解除 console-ban 限制',
+    type: 'toggle',
+    shouldInitRun: true,
+    shouldAddMenu: () => {
+      return unsafeWindow === unsafeWindow.top;
+    },
+    callback: (value) => {
+      if (value === 'on') {
+        unsafeWindow.Object.defineProperty = removeErrorMessageGetter();
+      } else if (value === 'off') {
+        unsafeWindow.Object.defineProperty = originalDefineProperty;
       }
     },
   });
 
   QuickMenu.add({
-    name: '清空缓存',
+    name: '清空菜单缓存',
     type: 'button',
     shouldInitRun: false,
     shouldAddMenu: () => {

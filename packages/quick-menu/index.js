@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         QuickMenu
 // @namespace    https://github.com/JiyuShao/greasyfork-scripts
-// @version      2024-05-23
+// @version      2024-06-11
 // @description  油猴菜单库，支持开关菜单，支持状态保持，支持 Iframe
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
 // @grant        GM_registerMenuCommand
@@ -41,9 +41,9 @@ const QuickMenu = {
         }
       }
       // 如果level大于0，我们至少在一个嵌套的iframe中
-      const currentOrderMap = GM_getValue('MD_ORDER_MAP') || {};
+      const currentOrderMap = GM_getValue('QM_ORDER_MAP') || {};
       const currentOrder = (currentOrderMap[level] || -1) + 1;
-      GM_setValue('MD_ORDER_MAP', {
+      GM_setValue('QM_ORDER_MAP', {
         ...currentOrderMap,
         [level]: currentOrder,
       });
@@ -52,9 +52,9 @@ const QuickMenu = {
 
     // 添加更新监听回调，保证菜单展示正确，不需要销毁
     GM_addValueChangeListener(
-      'MD_TRIGGER_UPDATE',
+      'QM_TRIGGER_UPDATE',
       (_key, _oldValue, _newValue, remote) => {
-        console.log('[Monkey Debuger] MD_TRIGGER_UPDATE', {
+        console.log('[QuickMenu] QM_TRIGGER_UPDATE', {
           currentLabel: this.label,
           remote,
           oldValue: _oldValue,
@@ -77,18 +77,18 @@ const QuickMenu = {
         value: e.value,
       };
     });
-    GM_setValue('MD_MENU', this.storeConfigMap);
+    GM_setValue('QM_MENU', this.storeConfigMap);
     // 触发其他实例进行更新
-    GM_setValue('MD_TRIGGER_UPDATE', `${this.label}:${Math.random()}`);
+    GM_setValue('QM_TRIGGER_UPDATE', `${this.label}:${Math.random()}`);
   },
   // 获取菜单配置
   getMenuConfigStore: function () {
     // 初始化 store 数据
-    this.storeConfigMap = GM_getValue('MD_MENU') || {};
+    this.storeConfigMap = GM_getValue('QM_MENU') || {};
   },
   clearStore: function () {
     // 清空 store 数据
-    GM_setValue('MD_MENU', undefined);
+    GM_setValue('QM_MENU', undefined);
     this._update({
       useStore: true, // 使用 store 数据，只更新当前环境
       triggerCallback: true, // 当前环境也要执行回调
@@ -108,7 +108,7 @@ const QuickMenu = {
     }
     // 检查配置名称
     if (!config.name && typeof config === 'object') {
-      alert('MD_MENU.add Config name is need.');
+      alert('QM_MENU.add Config name is need.');
       return;
     }
     // 添加到状态配置数据中
@@ -155,7 +155,7 @@ const QuickMenu = {
       }
     });
 
-    console.debug(`[Monkey Debuger] ${this.label}: 状态已更新`, {
+    console.debug(`[QuickMenu] ${this.label}: 状态已更新`, {
       options,
       stateConfigMap: this.stateConfigMap,
     });
@@ -204,7 +204,7 @@ const QuickMenu = {
         currentConfig.id = GM_registerMenuCommand(
           menuDisplay,
           () => {
-            console.debug(`[Monkey Debuger] ${this.label}:点击${menuDisplay}`);
+            console.debug(`[QuickMenu] ${this.label}:点击${menuDisplay}`);
             // 切换 value，并更新，实际执行时只有 toggle 的值会更新
             currentConfig.value = { on: 'off', off: 'on' }[currentConfig.value];
             // 使用最新的 value 执行用户回调
@@ -221,7 +221,7 @@ const QuickMenu = {
     if (triggerRemote) {
       this.setMenuConfigStore();
     }
-    console.debug(`[Monkey Debuger] ${this.label}: 更新已提交`);
+    console.debug(`[QuickMenu] ${this.label}: 更新已提交`);
   },
   // 触发更新
   _update: function (options) {
