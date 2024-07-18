@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         MonkeyDebugger
 // @namespace    https://github.com/JiyuShao/greasyfork-scripts
-// @version      2024-06-11
+// @version      2024-07-18
 // @description  Debug js using monkey patch
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
 // @license      MIT
 // @match        *://*/*
+// @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
@@ -129,6 +130,27 @@
         unsafeWindow.Object.defineProperty = removeErrorMessageGetter();
       } else if (value === 'off') {
         unsafeWindow.Object.defineProperty = originalDefineProperty;
+      }
+    },
+  });
+
+  const originalFetch = unsafeWindow.fetch;
+  QuickMenu.add({
+    name: 'Fetch with credentials',
+    type: 'toggle',
+    shouldInitRun: true,
+    shouldAddMenu: () => {
+      return true;
+    },
+    callback: (value) => {
+      if (value === 'on') {
+        unsafeWindow.fetch = function (input, init) {
+          init = init || {};
+          init.credentials = 'include';
+          return originalFetch(input, init);
+        };
+      } else if (value === 'off') {
+        unsafeWindow.fetch = originalFetch;
       }
     },
   });
