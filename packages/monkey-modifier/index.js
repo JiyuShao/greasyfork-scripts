@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         MonkeyModifier
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/JiyuShao/greasyfork-scripts
 // @version      2024-07-29
-// @description  try to take over the world!
-// @author       You
+// @description  Change webpage content
+// @author       Jiyu Shao <jiyu.shao@gmail.com>
+// @license      MIT
 // @match        *://*/*
 // @run-at       document-start
 // @grant        unsafeWindow
