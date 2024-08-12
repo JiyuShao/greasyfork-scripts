@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MonkeyModifier
 // @namespace    https://github.com/JiyuShao/greasyfork-scripts
-// @version      2024-07-29
+// @version      2024-08-12
 // @description  Change webpage content
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
 // @license      MIT
@@ -162,6 +162,14 @@
     }
 
     [title="最后修改时间"] {
+      display: none !important;
+    }
+
+    .left-tree-bottom__manager-company--wide {
+      display: none !important;
+    }
+
+    .left-tree-narrow .left-tree-bottom__personal--icons > a:nth-child(1) {
       display: none !important;
     }
   `;
