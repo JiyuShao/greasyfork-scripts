@@ -56,7 +56,7 @@
     return finalFn;
   };
   QuickMenu.add({
-    name: '开启 Function 调试',
+    name: '添加 Function 调试',
     type: 'toggle',
     shouldInitRun: true,
     shouldAddMenu: () => {
@@ -64,11 +64,24 @@
     },
     callback: (value) => {
       if (value === 'on') {
-        // 替换全局的 Function constructor
         unsafeWindow.Function = addFnPatchCode();
       } else if (value === 'off') {
-        // 替换全局的 Function constructor
+        unsafeWindow.Function = originalFunction;
+      }
+    },
+  });
+  QuickMenu.add({
+    name: '删除 Function 调试',
+    type: 'toggle',
+    shouldInitRun: true,
+    shouldAddMenu: () => {
+      return unsafeWindow === unsafeWindow.top;
+    },
+    callback: (value) => {
+      if (value === 'on') {
         unsafeWindow.Function = removeFnDebugger();
+      } else if (value === 'off') {
+        unsafeWindow.Function = originalFunction;
       }
     },
   });
@@ -90,7 +103,7 @@
     };
   };
   QuickMenu.add({
-    name: '开启 eval 调试',
+    name: '添加 eval 调试',
     type: 'toggle',
     shouldInitRun: true,
     shouldAddMenu: () => {
@@ -98,10 +111,24 @@
     },
     callback: (value) => {
       if (value === 'on') {
-        // 替换全局的 eval 函数
         unsafeWindow.eval = addEvalPatchCode();
       } else if (value === 'off') {
+        unsafeWindow.eval = originalEval;
+      }
+    },
+  });
+  QuickMenu.add({
+    name: '删除 eval 调试',
+    type: 'toggle',
+    shouldInitRun: true,
+    shouldAddMenu: () => {
+      return unsafeWindow === unsafeWindow.top;
+    },
+    callback: (value) => {
+      if (value === 'on') {
         unsafeWindow.eval = removeEvalDebugger();
+      } else if (value === 'off') {
+        unsafeWindow.eval = originalEval;
       }
     },
   });
@@ -151,6 +178,27 @@
         };
       } else if (value === 'off') {
         unsafeWindow.fetch = originalFetch;
+      }
+    },
+  });
+
+  // 保存原始的 location 对象
+  const originalOnBeforeUnload = window.onbeforeunload;
+  QuickMenu.add({
+    name: '开启网页销毁（跳转）监听',
+    type: 'toggle',
+    shouldInitRun: true,
+    shouldAddMenu: () => {
+      return unsafeWindow === unsafeWindow.top;
+    },
+    callback: (value) => {
+      if (value === 'on') {
+        window.onbeforeunload = function (...args) {
+          debugger;
+          return originalOnBeforeUnload.call(this, ...args);
+        };
+      } else if (value === 'off') {
+        window.onbeforeunload = originalOnBeforeUnload;
       }
     },
   });
