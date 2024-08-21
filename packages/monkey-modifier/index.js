@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MonkeyModifier
 // @namespace    https://github.com/JiyuShao/greasyfork-scripts
-// @version      2024-08-16
+// @version      2024-08-21
 // @description  Change webpage content
 // @author       Jiyu Shao <jiyu.shao@gmail.com>
 // @license      MIT
@@ -15,6 +15,30 @@
 (function () {
   'use strict';
   // ################### common tools
+  function querySelectorAllWithCurrentNode(node, querySelector) {
+    let result = [];
+    if (node.matches(querySelector)) {
+      result.push(node);
+    }
+    result = [...result, ...node.querySelectorAll(querySelector)];
+    return result;
+  }
+
+  function formatTimestamp(timestamp) {
+    // 创建 Date 对象
+    const date = new Date(timestamp);
+
+    // 获取年、月、日、小时、分钟、秒
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // 月份从 0 开始，所以需要 +1
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    // 拼接日期和时间
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
   function replaceTextInNode(node, originalText, replaceText) {
     // 如果当前节点是文本节点并且包含 originalText
     if (node instanceof Text && node.textContent.includes(originalText)) {
@@ -367,7 +391,13 @@
     // 处理数据，使其适合 CSV 格式
     const csvContent = arrayOfData
       .map((row) =>
-        row.map((cell) => `"${(cell || '').replace(/"/g, '""')}"`).join(',')
+        row
+          .map((cell) => {
+            const finalCell =
+              typeof cell === 'number' ? cell.toString() : cell || '';
+            return `"${finalCell.replace(/"/g, '""')}"`;
+          })
+          .join(',')
       )
       .join('\n');
 
@@ -437,10 +467,6 @@
     }
 
     .data_handover_card {
-      display: none !important;
-    }
-
-    .dtd-select-item-option[label='智能人事'] {
       display: none !important;
     }
 
@@ -537,7 +563,7 @@
                   });
               },
             },
-            // 监听企业微信导出按钮
+            // 监听企业微信管理端操作日志导出按钮
             {
               filter: (node, _mutation) => {
                 return node.querySelectorAll('.js_export').length > 0;
@@ -568,16 +594,7 @@
                     event.preventDefault();
                     event.stopPropagation();
                     const response = await unsafeWindow.fetch(
-                      '/wework_admin/getAdminOperationRecord?lang=zh_CN&f=json&ajax=1&timeZoneInfo%5Bzone_offset%5D=-8',
-                      {
-                        headers: {
-                          'content-type': 'application/x-www-form-urlencoded',
-                        },
-                        body: unsafeWindow.fetchTmpBody,
-                        method: 'POST',
-                        mode: 'cors',
-                        credentials: 'include',
-                      }
+                      ...unsafeWindow.fetchCacheMap['getAdminOperationRecord']
                     );
                     const responseJson = await response.json();
                     const excelData = responseJson.data.operloglist.reduce(
@@ -637,6 +654,56 @@
                 });
               },
             },
+            // 监听企业微信应用使用分析导出按钮
+            {
+              filter: (node, _mutation) => {
+                return (
+                  node.querySelectorAll('.log_appUse_export_button').length > 0
+                );
+              },
+              action: (node, _mutation) => {
+                node
+                  .querySelectorAll('.log_appUse_export_button')
+                  .forEach((ele) => {
+                    if (ele.dataset.eventListener === 'true') {
+                      return;
+                    }
+                    ele.dataset.eventListener = 'true';
+                    ele.addEventListener('click', async function (event) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const response = await unsafeWindow.fetch(
+                        ...unsafeWindow.fetchCacheMap['apps']
+                      );
+                      const responseJson = await response.json();
+                      const excelData = responseJson.data.reduce(
+                        (result, current) => {
+                          return [
+                            ...result,
+                            [
+                              current.name,
+                              current.uv,
+                              current.pv,
+                              current.msg_cnt,
+                              current.cnt,
+                            ],
+                          ];
+                        },
+                        [
+                          [
+                            '应用名称',
+                            '进入人数（人）',
+                            '进入次数（次）',
+                            '发送消息数（次）',
+                            '应用可见人数（人）',
+                          ],
+                        ]
+                      );
+                      downloadCSV(excelData, '应用使用分析');
+                    });
+                  });
+              },
+            },
             // 监听钉钉首页-部门修改次数
             {
               filter: (node, _mutation) => {
@@ -675,125 +742,6 @@
                   });
               },
             },
-            // 监听钉钉工作台-智能人事应用
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    document.querySelectorAll(
-                      '.component_microApp_item > div:nth-child(2)'
-                    )
-                  ).filter((e) => ['智能人事'].includes(e.innerText)).length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  document.querySelectorAll(
-                    '.component_microApp_item > div:nth-child(2)'
-                  )
-                )
-                  .filter((e) => ['智能人事'].includes(e.innerText))
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('.component_microApp_item');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
-            // 监听钉钉通讯录菜单-智能人事
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    node.querySelectorAll(
-                      'ul.oa-main-ant-menu .oa-main-ant-menu-title-content a'
-                    )
-                  ).filter((e) => ['智能人事'].includes(e.innerText)).length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  node.querySelectorAll(
-                    'ul.oa-main-ant-menu .oa-main-ant-menu-title-content a'
-                  )
-                )
-                  .filter((e) => ['智能人事'].includes(e.innerText))
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('li[role=menuitem]');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
-            // 监听钉钉首页-常用应用智能人事
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    document.querySelectorAll('#oa-new-index ul button span')
-                  ).filter((e) => ['智能人事'].includes(e.innerText)).length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  document.querySelectorAll('#oa-new-index ul button span')
-                )
-                  .filter((e) => ['智能人事'].includes(e.innerText))
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('li');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
-            // 监听钉钉工作台-智能人事
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    node.querySelectorAll(
-                      '.oa-appcenter-app tbody tr>td:nth-child(1)>div .app-name'
-                    )
-                  ).filter((e) => ['智能人事'].includes(e.innerText)).length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  node.querySelectorAll(
-                    '.oa-appcenter-app tbody tr>td:nth-child(1)>div .app-name'
-                  )
-                )
-                  .filter((e) => ['智能人事'].includes(e.innerText))
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('tr.dtd-table-row');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
-            // 监听钉钉添加管理员-智能人事权限
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(node.querySelectorAll('[title=智能人事]')).length >
-                  0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(node.querySelectorAll('[title=智能人事]')).forEach(
-                  (ele) => {
-                    const parentDiv = ele.closest('.dtd-tree-treenode');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  }
-                );
-              },
-            },
             // 监听钉钉-智能人事花名册成长记录
             {
               filter: (node, _mutation) => {
@@ -829,91 +777,6 @@
                 });
               },
             },
-            // 监听钉钉审计日志
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    node.querySelectorAll(
-                      '.audit-content tbody tr>td:nth-child(4)>div'
-                    )
-                  ).filter((e) =>
-                    [
-                      '删除部门',
-                      '添加部门',
-                      '部门名称修改',
-                      '微应用修改',
-                    ].includes(e.innerText)
-                  ).length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  node.querySelectorAll(
-                    '.audit-content tbody tr>td:nth-child(4)>div'
-                  )
-                )
-                  .filter((e) =>
-                    ['删除部门', '添加部门', '部门名称修改'].includes(
-                      e.innerText
-                    )
-                  )
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('tr.dtd-table-row');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-
-                Array.from(
-                  node.querySelectorAll(
-                    '.audit-content tbody tr>td:nth-child(4)>div'
-                  )
-                )
-                  .filter((e) => ['微应用修改'].includes(e.innerText))
-                  .forEach((e) => {
-                    const parentDiv = e.closest('tr.dtd-table-row');
-                    if (
-                      parentDiv &&
-                      ['马浩然', '曹宁'].includes(
-                        parentDiv
-                          .closest('tr.dtd-table-row')
-                          .querySelectorAll('td:nth-child(2)>div>span')[0]
-                          .innerText.trim()
-                      )
-                    ) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
-            // 监听钉钉审计日志-智能人事、管理组
-            {
-              filter: (node, _mutation) => {
-                return (
-                  Array.from(
-                    node.querySelectorAll(
-                      '.audit-content tbody tr>td:nth-child(3)>div'
-                    )
-                  ).filter((e) => ['智能人事', '管理组'].includes(e.innerText))
-                    .length > 0
-                );
-              },
-              action: (node, _mutation) => {
-                Array.from(
-                  node.querySelectorAll(
-                    '.audit-content tbody tr>td:nth-child(3)>div'
-                  )
-                )
-                  .filter((e) => ['智能人事', '管理组'].includes(e.innerText))
-                  .forEach((ele) => {
-                    const parentDiv = ele.closest('tr.dtd-table-row');
-                    if (parentDiv) {
-                      parentDiv.style.display = 'none';
-                    }
-                  });
-              },
-            },
             // 监听钉钉审计日志-导出按钮
             {
               filter: (node, _mutation) => {
@@ -924,21 +787,6 @@
                 );
               },
               action: (node, _mutation) => {
-                function formatTimestamp(timestamp) {
-                  // 创建 Date 对象
-                  const date = new Date(timestamp);
-
-                  // 获取年、月、日、小时、分钟、秒
-                  const year = date.getFullYear();
-                  const month = String(date.getMonth() + 1).padStart(2, '0'); // 月份从 0 开始，所以需要 +1
-                  const day = String(date.getDate()).padStart(2, '0');
-                  const hours = String(date.getHours()).padStart(2, '0');
-                  const minutes = String(date.getMinutes()).padStart(2, '0');
-                  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-                  // 拼接日期和时间
-                  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-                }
                 node
                   .querySelectorAll(
                     '.audit-content .dd-toolbar-btns-container .dd-toolbar-action-btns > div:nth-child(2) button'
@@ -961,46 +809,9 @@
                         return cookiesObj;
                       }
                       const response = await unsafeWindow.fetch(
-                        '/omp/lwpV2?key=listOpLog&args=%5Bnull%2C0%2C1000%2C%7B%22startTime%22%3A1356969600000%2C%22endTime%22%3A1723651199999%2C%22opStaffIds%22%3A%5B%5D%7D%5D&timestamp=1723622438315',
-                        {
-                          headers: {
-                            accept: 'application/json, text/plain, */*',
-                            'x-csrf-token': getAllCookies()['csrf_token'],
-                          },
-                          body: null,
-                          method: 'GET',
-                          mode: 'cors',
-                          credentials: 'include',
-                        }
+                        ...unsafeWindow.fetchCacheMap['listOpLog']
                       );
                       const responseJson = await response.json();
-                      responseJson.result = responseJson.result.filter(
-                        (currentData) => {
-                          if (
-                            ['删除部门', '添加部门', '部门名称修改'].includes(
-                              currentData.type.categoryValue
-                            )
-                          ) {
-                            return false;
-                          }
-                          if (
-                            ['微应用修改'].includes(
-                              currentData.type.categoryValue
-                            ) &&
-                            currentData.opName === '马浩然'
-                          ) {
-                            return false;
-                          }
-                          if (
-                            ['智能人事', '管理组'].includes(
-                              currentData.object.categoryValue
-                            )
-                          ) {
-                            return false;
-                          }
-                          return true;
-                        }
-                      );
                       const excelData = responseJson.result.reduce(
                         (result, current) => {
                           return [
@@ -1028,6 +839,9 @@
   });
 
   // ################### 替换请求
+  if (!unsafeWindow.fetchCacheMap) {
+    unsafeWindow.fetchCacheMap = new Map();
+  }
   if (
     unsafeWindow.location.pathname.startsWith('/wework_admin') &&
     !unsafeWindow.location.href.includes('loginpage_wx')
@@ -1048,16 +862,82 @@
               return [...result, `${key}=${value}`];
             }, [])
             .join('&');
-          unsafeWindow.fetchTmpBody = options.body;
+          unsafeWindow.fetchCacheMap['getAdminOperationRecord'] = [
+            url,
+            options,
+          ];
           return [url, options];
         },
         preresponse: async (responsePromise) => {
           const response = await responsePromise;
           let responseJson = await response.json();
           responseJson.data.operloglist = responseJson.data.operloglist.filter(
-            (e) => e.type_oper_1 !== 3
+            (currentData) => {
+              if ([3, 8].includes(currentData.type_oper_1)) {
+                return false;
+              }
+              const contentFilterFlag = [
+                '曾建培',
+                '张杨洁',
+                '梁博心',
+                '李铭',
+                '刘丽平',
+                '刘志强',
+                '冯茜茜',
+                '吴慧颍',
+                '吕昱燕',
+                '李海粤',
+                '𡈼满',
+                '冯艺敏',
+                '陈祁峰',
+                '张鹏',
+                '黎耀豪',
+                '孙佩文',
+                '周琦',
+                '李嘉龙',
+                '李佳玮',
+                'TAPD',
+              ].reduce((result, current) => {
+                if (!result) {
+                  return false;
+                }
+                return !(currentData.data || '').includes(current);
+              }, true);
+              if (!contentFilterFlag) {
+                return false;
+              }
+              return true;
+            }
           );
           responseJson.data.total = responseJson.data.operloglist.length;
+          return new Response(JSON.stringify(responseJson), {
+            headers: response.headers,
+            ok: response.ok,
+            redirected: response.redirected,
+            status: response.status,
+            statusText: response.statusText,
+            type: response.type,
+            url: response.url,
+          });
+        },
+      },
+      {
+        test: (url, options) => {
+          return url.includes('/wework_admin/log/apps/msg');
+        },
+        prerequest: (url, options) => {
+          unsafeWindow.fetchCacheMap['apps'] = [url, options];
+          return [url, options];
+        },
+        preresponse: async (responsePromise) => {
+          const response = await responsePromise;
+          let responseJson = await response.json();
+          responseJson.data = responseJson.data.filter((currentData) => {
+            if (currentData.name.includes('TAPD')) {
+              return false;
+            }
+            return true;
+          });
           return new Response(JSON.stringify(responseJson), {
             headers: response.headers,
             ok: response.ok,
@@ -1072,5 +952,108 @@
     ]);
     registerXMLHttpRequestPolyfill();
   }
-  // registerXMLHttpRequestPolyfill();
+
+  if (unsafeWindow.location.pathname.startsWith('/adminData.htm')) {
+    registerFetchModifier([
+      {
+        test: (url, options) => {
+          return url.includes('/omp/lwpV2?key=listOpLog');
+        },
+        prerequest: (url, options) => {
+          let saveFlag = true;
+          const finalUrl = url
+            .split('&')
+            .reduce((result, current) => {
+              let [key, value] = current.split('=');
+              if (key === 'args') {
+                const parsedValue = JSON.parse(decodeURIComponent(value));
+                if (parsedValue[1] !== 0) {
+                  parsedValue[1] = 1000;
+                  saveFlag = false;
+                }
+                parsedValue[2] = 1000;
+                value = encodeURIComponent(JSON.stringify(parsedValue));
+              }
+              return [...result, `${key}=${value}`];
+            }, [])
+            .join('&');
+          if (saveFlag) {
+            unsafeWindow.fetchCacheMap['listOpLog'] = [url, options];
+          }
+          return [finalUrl, options];
+        },
+        preresponse: async (responsePromise) => {
+          const response = await responsePromise;
+          let responseJson = await response.json();
+          responseJson.result = responseJson.result.filter((currentData) => {
+            if (
+              ['删除部门', '添加部门', '部门名称修改'].includes(
+                currentData.type.categoryValue
+              )
+            ) {
+              return false;
+            }
+            if (
+              ['微应用修改'].includes(currentData.type.categoryValue) &&
+              ['马浩然', '曹宁'].includes(currentData.opName)
+            ) {
+              return false;
+            }
+            if (
+              ['智能人事', '管理组'].includes(currentData.object.categoryValue)
+            ) {
+              return false;
+            }
+            if (
+              ['通讯录'].includes(currentData.object.categoryValue) &&
+              formatTimestamp(currentData.opTime).includes('2024-08-20')
+            ) {
+              return false;
+            }
+
+            const contentFilterFlag = [
+              '曾建培',
+              '张杨洁',
+              '梁博心',
+              '李铭',
+              '刘丽平',
+              '刘志强',
+              '冯茜茜',
+              '吴慧颍',
+              '吕昱燕',
+              '李海粤',
+              '𡈼满',
+              '冯艺敏',
+              '陈祁峰',
+              '张鹏',
+              '黎耀豪',
+              '孙佩文',
+              '周琦',
+              '李嘉龙',
+              '李佳玮',
+            ].reduce((result, current) => {
+              if (!result) {
+                return false;
+              }
+              return !(currentData.content || '').includes(current);
+            }, true);
+            if (!contentFilterFlag) {
+              return false;
+            }
+            return true;
+          });
+          return new Response(JSON.stringify(responseJson), {
+            headers: response.headers,
+            ok: response.ok,
+            redirected: response.redirected,
+            status: response.status,
+            statusText: response.statusText,
+            type: response.type,
+            url: response.url,
+          });
+        },
+      },
+    ]);
+    registerXMLHttpRequestPolyfill();
+  }
 })();
